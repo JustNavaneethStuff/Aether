@@ -1,0 +1,227 @@
+x-service-common: &service-common
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile.service
+  env_file:
+    - ../.env
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  networks:
+    - aether
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: aether
+      POSTGRES_PASSWORD: aether
+      POSTGRES_DB: aether
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aether"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aether
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aether
+
+  memory-service:
+    <<: *service-common
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.service
+      args:
+        SERVICE_MODULE: aether_memory.main:app
+        SERVICE_PORT: 8002
+    environment:
+      SERVICE_NAME: memory-service
+      POSTGRES_URL: postgresql+asyncpg://aether:aether@postgres:5432/aether
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8002:8002"
+    command: ["uvicorn", "aether_memory.main:app", "--host", "0.0.0.0", "--port", "8002"]
+
+  orchestrator:
+    <<: *service-common
+    environment:
+      SERVICE_NAME: orchestrator
+      MEMORY_SERVICE_URL: http://memory-service:8002
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8001:8001"
+    command: ["uvicorn", "aether_orchestrator.main:app", "--host", "0.0.0.0", "--port", "8001"]
+    depends_on:
+      - memory-service
+
+  response-builder:
+    <<: *service-common
+    environment:
+      SERVICE_NAME: response-builder
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8003:8003"
+    command: ["uvicorn", "aether_response_builder.main:app", "--host", "0.0.0.0", "--port", "8003"]
+
+  api-gateway:
+    <<: *service-common
+    environment:
+      SERVICE_NAME: api-gateway
+      ORCHESTRATOR_URL: http://orchestrator:8001
+      MEMORY_SERVICE_URL: http://memory-service:8002
+      RESPONSE_BUILDER_URL: http://response-builder:8003
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    command: ["uvicorn", "aether_gateway.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    depends_on:
+      - orchestrator
+      - memory-service
+      - response-builder
+
+  agent-planner:
+    <<: *service-common
+    environment:
+      SERVICE_NAME: agent-planner
+      SERVICE_URL: http://agent-planner:8010
+      REDIS_URL: redis://redis:6379/0
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "8010:8010"
+    command: ["uvicorn", "aether_agent_planner.main:app", "--host", "0.0.0.0", "--port", "8010"]
+
+  agent-research:
+    <<: *service-common
+    environment:
+      SERVICE_NAME: agent-research
+      SERVICE_URL: http://agent-research:8011
+      REDIS_URL: redis://redis:6379/0
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+    ports:
+      - "8011:8011"
+    command: ["uvicorn", "aether_agent_research.main:app", "--host", "0.0.0.0", "--port", "8011"]
+
+  agent-critic:
+    <<: *service-common
+    environment:
+      SERVICE_NAME: agent-critic
+      SERVICE_URL: http://agent-critic:8012
+      REDIS_URL: redis://redis:6379/0
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+    ports:
+      - "8012:8012"
+    command: ["uvicorn", "aether_agent_critic.main:app", "--host", "0.0.0.0", "--port", "8012"]
+
+  agent-summarizer:
+    <<: *service-common
+    environment:
+      SERVICE_NAME: agent-summarizer
+      SERVICE_URL: http://agent-summarizer:8013
+      REDIS_URL: redis://redis:6379/0
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+    ports:
+      - "8013:8013"
+    command: ["uvicorn", "aether_agent_summarizer.main:app", "--host", "0.0.0.0", "--port", "8013"]
+
+  agent-code:
+    <<: *service-common
+    environment:
+      SERVICE_NAME: agent-code
+      SERVICE_URL: http://agent-code:8014
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8014:8014"
+    command: ["uvicorn", "aether_agent_code.main:app", "--host", "0.0.0.0", "--port", "8014"]
+
+  agent-data-analysis:
+    <<: *service-common
+    environment:
+      SERVICE_NAME: agent-data-analysis
+      SERVICE_URL: http://agent-data-analysis:8015
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8015:8015"
+    command: ["uvicorn", "aether_agent_data_analysis.main:app", "--host", "0.0.0.0", "--port", "8015"]
+
+  agent-fact-checker:
+    <<: *service-common
+    environment:
+      SERVICE_NAME: agent-fact-checker
+      SERVICE_URL: http://agent-fact-checker:8016
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8016:8016"
+    command: ["uvicorn", "aether_agent_fact_checker.main:app", "--host", "0.0.0.0", "--port", "8016"]
+
+  agent-memory-manager:
+    <<: *service-common
+    environment:
+      SERVICE_NAME: agent-memory-manager
+      SERVICE_URL: http://agent-memory-manager:8017
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8017:8017"
+    command: ["uvicorn", "aether_agent_memory_manager.main:app", "--host", "0.0.0.0", "--port", "8017"]
+
+  agent-tool-executor:
+    <<: *service-common
+    environment:
+      SERVICE_NAME: agent-tool-executor
+      SERVICE_URL: http://agent-tool-executor:8018
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8018:8018"
+    command: ["uvicorn", "aether_agent_tool_executor.main:app", "--host", "0.0.0.0", "--port", "8018"]
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.116.1
+    profiles: ["observability"]
+    command: ["--config=/etc/otel-collector-config.yml"]
+    volumes:
+      - ../monitoring/otel-collector-config.yml:/etc/otel-collector-config.yml
+    ports:
+      - "4317:4317"
+      - "8889:8889"
+    networks:
+      - aether
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    profiles: ["observability"]
+    volumes:
+      - ../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - aether
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    profiles: ["observability"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    ports:
+      - "3000:3000"
+    networks:
+      - aether
+
+networks:
+  aether:
+    driver: bridge

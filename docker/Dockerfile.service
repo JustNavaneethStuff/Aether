@@ -1,0 +1,22 @@
+# syntax=docker/dockerfile:1
+
+FROM python:3.13-slim AS base
+WORKDIR /app
+RUN pip install --no-cache-dir uv
+
+FROM base AS builder
+ARG SERVICE_PATH
+COPY pyproject.toml uv.lock* ./
+COPY packages ./packages
+COPY services ./services
+RUN uv sync --all-packages
+
+FROM base AS runtime
+ARG SERVICE_MODULE
+ARG SERVICE_PORT=8000
+ENV SERVICE_MODULE=${SERVICE_MODULE}
+ENV SERVICE_PORT=${SERVICE_PORT}
+COPY --from=builder /app /app
+ENV PATH="/app/.venv/bin:$PATH"
+EXPOSE ${SERVICE_PORT}
+CMD sh -c "uvicorn ${SERVICE_MODULE} --host 0.0.0.0 --port ${SERVICE_PORT}"

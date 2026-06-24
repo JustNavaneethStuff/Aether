@@ -1,0 +1,52 @@
+[project]
+name = "aether"
+version = "0.1.0"
+description = "Enterprise-grade AI orchestration platform"
+readme = "README.md"
+requires-python = ">=3.13"
+
+[tool.uv.workspace]
+members = [
+    "packages/aether-common",
+    "services/api-gateway",
+    "services/orchestrator",
+    "services/memory-service",
+    "services/response-builder",
+    "services/agents/planner",
+    "services/agents/research",
+    "services/agents/critic",
+    "services/agents/summarizer",
+    "services/agents/code",
+    "services/agents/data-analysis",
+    "services/agents/fact-checker",
+    "services/agents/memory-manager",
+    "services/agents/tool-executor",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "httpx>=0.28.0",
+    "ruff>=0.9.0",
+    "mypy>=1.14.0",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "ASYNC"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests", "packages", "services"]
+pythonpath = ["packages/aether-common/src"]
