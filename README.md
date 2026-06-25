@@ -53,6 +53,28 @@ curl -N -X POST http://localhost:8000/v1/conversations/{id}/messages \
 curl http://localhost:8000/v1/agents
 ```
 
+## Phase 2 Features
+
+- **Tool calling** — `agent-tool-executor` with calculator and knowledge_search tools
+- **Vector search / RAG** — `knowledge-service` with hybrid embedding + TF-IDF search
+- **Checkpointing** — workflow state saved after each agent; resume via `POST /v1/conversations/{id}/resume`
+- **Rate limiting** — Redis sliding-window in api-gateway (60 req/min default)
+- **Authentication** — optional JWT auth (`AUTH_ENABLED=true`)
+- **Agent communication** — Redis pub/sub agent bus per conversation
+- **Plugin system** — entry-point based PluginRegistry for extensible tools
+
+### Phase 2 API Additions
+
+```
+POST   /v1/auth/token
+POST   /v1/knowledge/documents
+POST   /v1/knowledge/search
+POST   /v1/conversations/{id}/resume
+GET    /v1/tools
+POST   /v1/orchestrate/resume          (orchestrator)
+GET    /v1/workflows/{id}/checkpoint     (orchestrator)
+```
+
 ## Services
 
 | Service | Port | Description |
@@ -61,6 +83,7 @@ curl http://localhost:8000/v1/agents
 | orchestrator | 8001 | Task graph execution |
 | memory-service | 8002 | Conversation persistence |
 | response-builder | 8003 | Response aggregation + streaming |
+| knowledge-service | 8004 | Vector search + RAG |
 | agent-planner | 8010 | Task decomposition |
 | agent-research | 8011 | Research agent |
 | agent-critic | 8012 | Critique agent |

@@ -33,7 +33,7 @@ def create_app() -> FastAPI:
     setup_logging(settings.service_name, settings.log_level, settings.log_format)
     setup_tracing(settings.service_name)
 
-    app = FastAPI(title="Aether Memory Service", version="0.1.0")
+    app = FastAPI(title="Aether Memory Service", version="0.2.0")
     app.add_middleware(CorrelationIdMiddleware)
 
     session_factory = create_session_factory(settings.postgres_url)
@@ -78,8 +78,13 @@ def create_app() -> FastAPI:
 
     @app.get("/v1/conversations/{conversation_id}/messages")
     async def list_messages(conversation_id: UUID) -> list[dict]:
+        cached = await context_cache.get_messages(str(conversation_id))
+        if cached is not None:
+            return cached
         messages = await message_repo.list_by_conversation(conversation_id)
-        return [m.model_dump(mode="json") for m in messages]
+        serialized = [m.model_dump(mode="json") for m in messages]
+        await context_cache.set_messages(str(conversation_id), serialized)
+        return serialized
 
     @app.post("/v1/conversations/{conversation_id}/messages")
     async def add_message(conversation_id: UUID, body: dict) -> dict:
@@ -113,6 +118,13 @@ def create_app() -> FastAPI:
     async def save_task_graph(conversation_id: UUID, task_graph: TaskGraph) -> dict:
         await context_repo.save_task_graph(task_graph)
         return {"status": "saved", "id": str(task_graph.id)}
+
+    @app.get("/v1/conversations/{conversation_id}/task-graphs/latest")
+    async def get_latest_task_graph(conversation_id: UUID) -> TaskGraph:
+        graph = await context_repo.get_latest_task_graph(conversation_id)
+        if not graph:
+            raise HTTPException(status_code=404, detail="No task graph found")
+        return graph
 
     @app.post("/v1/conversations/{conversation_id}/executions")
     async def record_execution(conversation_id: UUID, body: dict) -> dict:

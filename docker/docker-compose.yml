@@ -78,6 +78,16 @@ services:
       - "8003:8003"
     command: ["uvicorn", "aether_response_builder.main:app", "--host", "0.0.0.0", "--port", "8003"]
 
+  knowledge-service:
+    <<: *service-common
+    environment:
+      SERVICE_NAME: knowledge-service
+      POSTGRES_URL: postgresql+asyncpg://aether:aether@postgres:5432/aether
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8004:8004"
+    command: ["uvicorn", "aether_knowledge.main:app", "--host", "0.0.0.0", "--port", "8004"]
+
   api-gateway:
     <<: *service-common
     environment:
@@ -85,7 +95,11 @@ services:
       ORCHESTRATOR_URL: http://orchestrator:8001
       MEMORY_SERVICE_URL: http://memory-service:8002
       RESPONSE_BUILDER_URL: http://response-builder:8003
+      KNOWLEDGE_SERVICE_URL: http://knowledge-service:8004
       REDIS_URL: redis://redis:6379/0
+      AUTH_ENABLED: ${AUTH_ENABLED:-false}
+      JWT_SECRET: ${JWT_SECRET:-aether-dev-secret-change-in-production}
+      RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-60}
     ports:
       - "8000:8000"
     command: ["uvicorn", "aether_gateway.main:app", "--host", "0.0.0.0", "--port", "8000"]
@@ -93,6 +107,7 @@ services:
       - orchestrator
       - memory-service
       - response-builder
+      - knowledge-service
 
   agent-planner:
     <<: *service-common
@@ -185,10 +200,13 @@ services:
     environment:
       SERVICE_NAME: agent-tool-executor
       SERVICE_URL: http://agent-tool-executor:8018
+      KNOWLEDGE_SERVICE_URL: http://knowledge-service:8004
       REDIS_URL: redis://redis:6379/0
     ports:
       - "8018:8018"
     command: ["uvicorn", "aether_agent_tool_executor.main:app", "--host", "0.0.0.0", "--port", "8018"]
+    depends_on:
+      - knowledge-service
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.116.1

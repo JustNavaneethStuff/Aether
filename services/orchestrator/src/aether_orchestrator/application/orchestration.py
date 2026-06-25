@@ -7,6 +7,8 @@ from aether_common.domain.agent import AgentResult, AgentTask, ExecuteAgentReque
 from aether_common.domain.conversation import SharedContext
 from aether_common.domain.enums import MessageRole, TaskGraphStatus, TaskStatus
 from aether_common.domain.task_graph import TaskGraph, topological_sort
+from aether_common.domain.workflow import AgentMessage
+from aether_common.infrastructure.agent_bus import AgentCommunicationBus, CheckpointStore
 from aether_common.infrastructure.redis_clients import AgentRegistry, EventBus
 from aether_common.observability.telemetry import AGENT_EXECUTIONS
 
@@ -48,6 +50,16 @@ class MemoryClient:
                 json=task_graph.model_dump(mode="json"),
             )
             response.raise_for_status()
+
+    async def get_latest_task_graph(self, conversation_id: UUID) -> TaskGraph | None:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{self._base_url}/v1/conversations/{conversation_id}/task-graphs/latest"
+            )
+            if response.status_code == 404:
+                return None
+            response.raise_for_status()
+            return TaskGraph.model_validate(response.json())
 
     async def record_execution(
         self, conversation_id: UUID, agent_name: str, latency_ms: int, usage: dict
@@ -91,10 +103,14 @@ class OrchestrationService:
         memory_client: MemoryClient,
         agent_client: AgentClient,
         event_bus: EventBus,
+        checkpoint_store: CheckpointStore,
+        agent_bus: AgentCommunicationBus,
     ) -> None:
         self._memory = memory_client
         self._agents = agent_client
         self._events = event_bus
+        self._checkpoints = checkpoint_store
+        self._agent_bus = agent_bus
 
     async def run(
         self, conversation_id: UUID, message: str
@@ -121,11 +137,87 @@ class OrchestrationService:
         context.artifacts.update(planner_result.artifacts)
         results: list[AgentResult] = [planner_result]
 
+        await self._execute_nodes(conversation_id, task_graph, context, results, message)
+
+        task_graph.status = TaskGraphStatus.COMPLETED
+        await self._memory.save_task_graph(conversation_id, task_graph)
+        await self._memory.update_context(conversation_id, context)
+        await self._checkpoints.delete(str(conversation_id))
+
+        final_response = self._extract_final_response(results)
+        await self._memory.add_message(conversation_id, MessageRole.ASSISTANT, final_response)
+        await self._events.publish(
+            "workflow.completed",
+            {"conversation_id": str(conversation_id)},
+        )
+        return task_graph, results, final_response
+
+    async def resume(
+        self, conversation_id: UUID
+    ) -> tuple[TaskGraph, list[AgentResult], str]:
+        checkpoint = await self._checkpoints.get(str(conversation_id))
+        if not checkpoint:
+            raise ValueError("No checkpoint found for conversation")
+
+        task_graph = TaskGraph.model_validate(checkpoint["task_graph"])
+        context = SharedContext.model_validate(checkpoint["context"])
+        results: list[AgentResult] = [
+            AgentResult.model_validate(r) for r in checkpoint.get("results", [])
+        ]
+        message = checkpoint.get("message", "")
+
+        completed_ids = set(checkpoint.get("completed_nodes", []))
+        for node in task_graph.nodes:
+            if str(node.id) in completed_ids:
+                node.status = TaskStatus.COMPLETED
+
+        await self._execute_nodes(
+            conversation_id, task_graph, context, results, message, skip_completed=True
+        )
+
+        task_graph.status = TaskGraphStatus.COMPLETED
+        await self._memory.save_task_graph(conversation_id, task_graph)
+        await self._memory.update_context(conversation_id, context)
+        await self._checkpoints.delete(str(conversation_id))
+
+        final_response = self._extract_final_response(results)
+        await self._memory.add_message(conversation_id, MessageRole.ASSISTANT, final_response)
+        await self._events.publish(
+            "workflow.completed",
+            {"conversation_id": str(conversation_id), "resumed": True},
+        )
+        return task_graph, results, final_response
+
+    async def _execute_nodes(
+        self,
+        conversation_id: UUID,
+        task_graph: TaskGraph,
+        context: SharedContext,
+        results: list[AgentResult],
+        message: str,
+        skip_completed: bool = False,
+    ) -> None:
+        completed_nodes: list[str] = []
+
         for node in topological_sort(task_graph.nodes):
+            if skip_completed and node.status == TaskStatus.COMPLETED:
+                completed_nodes.append(str(node.id))
+                continue
+
             node.status = TaskStatus.RUNNING
             await self._events.publish(
                 "task.started",
                 {"conversation_id": str(conversation_id), "agent": node.agent_name},
+            )
+
+            await self._agent_bus.publish(
+                AgentMessage(
+                    conversation_id=conversation_id,
+                    from_agent="orchestrator",
+                    to_agent=node.agent_name,
+                    message_type="task.dispatch",
+                    payload={"task_id": str(node.id), "description": node.input},
+                )
             )
 
             task = AgentTask(
@@ -139,12 +231,22 @@ class OrchestrationService:
                 node.output = result.output
                 context.artifacts.update(result.artifacts)
                 results.append(result)
+                completed_nodes.append(str(node.id))
                 await self._memory.record_execution(
                     conversation_id, node.agent_name, result.latency_ms, result.usage
                 )
                 await self._events.publish(
                     "task.completed",
                     {"conversation_id": str(conversation_id), "agent": node.agent_name},
+                )
+                await self._agent_bus.publish(
+                    AgentMessage(
+                        conversation_id=conversation_id,
+                        from_agent=node.agent_name,
+                        to_agent=None,
+                        message_type="task.completed",
+                        payload={"output": result.output},
+                    )
                 )
             except Exception as exc:
                 node.status = TaskStatus.FAILED
@@ -159,17 +261,18 @@ class OrchestrationService:
                 )
                 logger.error("agent_execution_failed", agent=node.agent_name, error=str(exc))
 
-        task_graph.status = TaskGraphStatus.COMPLETED
-        await self._memory.save_task_graph(conversation_id, task_graph)
-        await self._memory.update_context(conversation_id, context)
-
-        final_response = self._extract_final_response(results)
-        await self._memory.add_message(conversation_id, MessageRole.ASSISTANT, final_response)
-        await self._events.publish(
-            "workflow.completed",
-            {"conversation_id": str(conversation_id)},
-        )
-        return task_graph, results, final_response
+            await self._memory.save_task_graph(conversation_id, task_graph)
+            await self._checkpoints.save(
+                str(conversation_id),
+                {
+                    "task_graph": task_graph.model_dump(mode="json"),
+                    "context": context.model_dump(mode="json"),
+                    "results": [r.model_dump(mode="json") for r in results],
+                    "completed_nodes": completed_nodes,
+                    "message": message,
+                    "status": "running",
+                },
+            )
 
     def _extract_final_response(self, results: list[AgentResult]) -> str:
         for result in reversed(results):

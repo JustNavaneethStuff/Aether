@@ -12,6 +12,7 @@ members = [
     "services/orchestrator",
     "services/memory-service",
     "services/response-builder",
+    "services/knowledge-service",
     "services/agents/planner",
     "services/agents/research",
     "services/agents/critic",

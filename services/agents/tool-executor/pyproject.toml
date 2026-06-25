@@ -2,7 +2,7 @@
 name = "aether-agent-tool-executor"
 version = "0.1.0"
 requires-python = ">=3.13"
-dependencies = ["aether-common", "fastapi>=0.115.0", "uvicorn[standard]>=0.34.0", "redis>=5.2.0"]
+dependencies = ["aether-common", "fastapi>=0.115.0", "uvicorn[standard]>=0.34.0", "redis>=5.2.0", "httpx>=0.28.0"]
 [tool.uv.sources]
 aether-common = { workspace = true }
 [build-system]

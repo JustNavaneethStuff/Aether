@@ -98,6 +98,19 @@ class ContextRepository:
         context.artifacts.update(artifacts)
         return context
 
+    async def get_latest_task_graph(self, conversation_id: UUID) -> TaskGraph | None:
+        async with self._session_factory() as session:
+            result = await session.execute(
+                select(TaskGraphModel)
+                .where(TaskGraphModel.conversation_id == conversation_id)
+                .order_by(TaskGraphModel.created_at.desc())
+                .limit(1)
+            )
+            model = result.scalar_one_or_none()
+            if not model:
+                return None
+            return TaskGraph.model_validate(model.graph_json)
+
     async def save_task_graph(self, task_graph: TaskGraph) -> None:
         async with self._session_factory() as session:
             model = TaskGraphModel(
