@@ -42,3 +42,17 @@ class EventBus:
             self.STREAM_KEY,
             {"event_type": event_type, "payload": json.dumps(payload)},
         )
+
+    async def read_latest(self, count: int = 10, last_id: str = "0") -> list[dict]:
+        entries = await self._redis.xread({self.STREAM_KEY: last_id}, count=count, block=1000)
+        results: list[dict] = []
+        for _stream, messages in entries:
+            for msg_id, data in messages:
+                results.append(
+                    {
+                        "id": msg_id,
+                        "event_type": data.get("event_type", ""),
+                        "payload": json.loads(data.get("payload", "{}")),
+                    }
+                )
+        return results

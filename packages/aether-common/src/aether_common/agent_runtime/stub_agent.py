@@ -25,8 +25,7 @@ def create_stub_agent(
         start = time.perf_counter()
         description = request.task.input.get("description", request.task.description)
         content = (
-            f"[{agent_name} stub] Acknowledged task: {description[:200]}. "
-            f"Full implementation planned for Phase 2."
+            f"[{agent_name} stub] Acknowledged task: {description[:200]}. Full implementation planned for Phase 2."
         )
         latency_ms = int((time.perf_counter() - start) * 1000)
         return AgentResult(

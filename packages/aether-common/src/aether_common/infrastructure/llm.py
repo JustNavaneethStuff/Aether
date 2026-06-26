@@ -92,9 +92,7 @@ class AnthropicAdapter:
     async def complete(self, request: CompletionRequest) -> CompletionResponse:
         start = time.perf_counter()
         system = next((m.content for m in request.messages if m.role == "system"), None)
-        messages = [
-            {"role": m.role, "content": m.content} for m in request.messages if m.role != "system"
-        ]
+        messages = [{"role": m.role, "content": m.content} for m in request.messages if m.role != "system"]
         kwargs: dict = {
             "model": request.model or self._model,
             "messages": messages,

@@ -15,9 +15,26 @@ See [README.md](../../README.md) for service ports and quick start.
 3. API Gateway forwards to Orchestrator
 4. Orchestrator loads context from Memory Service
 5. Planner Agent decomposes the task into a directed task graph
-6. Orchestrator executes agents in topological order
-7. Context and artifacts are persisted after each agent execution
-8. Response Builder streams SSE events back to the client
+6. Orchestrator executes agents in topological order (pausing for approval if required)
+7. Context, usage, and artifacts are persisted after each agent execution
+8. Evaluation Service scores completed workflows from Redis Stream events
+9. Response Builder streams SSE events back to the client
+
+## Phase 3 Architecture
+
+```mermaid
+flowchart TB
+    Gateway[api_gateway] --> Orchestrator[orchestrator]
+    Orchestrator --> Agents[agent_services]
+    Orchestrator --> Memory[memory_service]
+    Orchestrator --> Events[redis_streams]
+    Events --> Evaluation[evaluation_service]
+    PromptRegistry[prompt_registry] --> Agents
+    Memory --> Postgres[(postgres)]
+    Evaluation --> Postgres
+    Gateway --> Evaluation
+    Gateway --> PromptRegistry
+```
 
 ## Design Principles
 
@@ -25,10 +42,12 @@ See [README.md](../../README.md) for service ports and quick start.
 - **Replaceable agents**: AgentProtocol + Redis registry
 - **Provider-agnostic LLM**: OpenAI, Anthropic, or mock fallback
 - **Observability by default**: structured logging, OTEL traces, Prometheus metrics
+- **Governance**: evaluation, prompt versioning, cost tracking, human approval
 
-## Phase 2 Hooks
+## Phase 3 Capabilities
 
-- Tool calling via agent-tool-executor
-- Vector search via knowledge-service slot
-- Checkpointing via task_nodes status persistence
-- Rate limiting and auth middleware stubs in api-gateway
+- Evaluation engine via `evaluation-service`
+- Prompt versioning via `prompt-registry`
+- Experiment and cost tracking via `memory-service`
+- Human approval workflows via orchestrator pause/resume
+- Grafana dashboards for agent performance and cost trends

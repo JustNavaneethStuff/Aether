@@ -34,6 +34,30 @@ LLM_TOKENS = Counter(
     "Total LLM tokens used",
     ["provider", "model", "type"],
 )
+LLM_COST_USD = Counter(
+    "llm_cost_usd_total",
+    "Total LLM cost in USD",
+    ["provider", "model"],
+)
+EVALUATION_SCORE = Histogram(
+    "evaluation_score",
+    "Workflow evaluation scores",
+    ["passed"],
+)
+APPROVAL_REQUESTS = Counter(
+    "approval_requests_total",
+    "Total approval requests",
+    ["decision"],
+)
+WORKFLOW_PAUSE_DURATION = Histogram(
+    "workflow_pause_duration_seconds",
+    "Workflow pause duration awaiting approval",
+)
+EXPERIMENT_VARIANT_REQUESTS = Counter(
+    "experiment_variant_requests_total",
+    "Requests per experiment variant",
+    ["experiment", "variant"],
+)
 
 
 def setup_logging(service_name: str, log_level: str = "INFO", log_format: str = "json") -> None:
@@ -52,9 +76,7 @@ def setup_logging(service_name: str, log_level: str = "INFO", log_format: str = 
 
     structlog.configure(
         processors=processors,
-        wrapper_class=structlog.make_filtering_bound_logger(
-            getattr(logging, log_level.upper(), logging.INFO)
-        ),
+        wrapper_class=structlog.make_filtering_bound_logger(getattr(logging, log_level.upper(), logging.INFO)),
         context_class=dict,
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,

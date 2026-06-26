@@ -1,6 +1,6 @@
 [project]
 name = "aether-orchestrator"
-version = "0.1.0"
+version = "0.3.0"
 requires-python = ">=3.13"
 dependencies = [
     "aether-common",
@@ -9,6 +9,8 @@ dependencies = [
     "httpx>=0.28.0",
     "redis>=5.2.0",
 ]
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24"]
 [tool.uv.sources]
 aether-common = { workspace = true }
 [build-system]

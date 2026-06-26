@@ -1,0 +1,76 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "panels": [
+    {
+      "title": "Agent Execution Latency (p95)",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(agent_execution_duration_seconds_bucket[5m]))",
+          "legendFormat": "{{agent_name}}"
+        }
+      ]
+    },
+    {
+      "title": "LLM Token Usage",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [
+        {
+          "expr": "rate(llm_tokens_total[5m])",
+          "legendFormat": "{{provider}}/{{model}}"
+        }
+      ]
+    },
+    {
+      "title": "LLM Cost (USD)",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "targets": [
+        {
+          "expr": "rate(llm_cost_usd_total[5m])",
+          "legendFormat": "{{provider}}/{{model}}"
+        }
+      ]
+    },
+    {
+      "title": "Evaluation Scores",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, rate(evaluation_score_bucket[5m]))",
+          "legendFormat": "p50 score"
+        }
+      ]
+    },
+    {
+      "title": "Approval Requests",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+      "targets": [
+        {
+          "expr": "rate(approval_requests_total[5m])",
+          "legendFormat": "{{decision}}"
+        }
+      ]
+    },
+    {
+      "title": "Experiment Variant Requests",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+      "targets": [
+        {
+          "expr": "rate(experiment_variant_requests_total[5m])",
+          "legendFormat": "{{experiment}}/{{variant}}"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "title": "Aether Phase 3 Dashboard",
+  "uid": "aether-phase3",
+  "version": 1
+}

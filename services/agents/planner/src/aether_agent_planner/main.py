@@ -39,11 +39,7 @@ Use depends_on with agent names (not UUIDs). Keep graphs acyclic."""
 
 async def execute_planner(request: ExecuteAgentRequest) -> AgentResult:
     start = time.perf_counter()
-    user_message = (
-        request.context.messages[-1].content
-        if request.context.messages
-        else request.task.description
-    )
+    user_message = request.context.messages[-1].content if request.context.messages else request.task.description
 
     response = await llm.complete(
         CompletionRequest(
@@ -85,9 +81,7 @@ async def execute_planner(request: ExecuteAgentRequest) -> AgentResult:
         )
 
     for item, node in zip(nodes_data, nodes, strict=True):
-        node.depends_on = [
-            name_to_id[dep] for dep in item.get("depends_on", []) if dep in name_to_id
-        ]
+        node.depends_on = [name_to_id[dep] for dep in item.get("depends_on", []) if dep in name_to_id]
 
     task_graph = TaskGraph(
         conversation_id=request.context.conversation_id,

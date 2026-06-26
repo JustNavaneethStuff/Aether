@@ -34,10 +34,16 @@ class OrchestratorSettings(BaseServiceSettings):
     memory_service_url: str = "http://localhost:8002"
     host: str = "0.0.0.0"
     port: int = 8001
+    approvals_enabled: bool = False
 
 
 class ResumeRequest(BaseModel):
     conversation_id: UUID
+
+
+class ApprovalActionRequest(BaseModel):
+    decided_by: str = "system"
+    comment: str = ""
 
 
 settings = OrchestratorSettings()
@@ -47,7 +53,7 @@ def create_app() -> FastAPI:
     setup_logging(settings.service_name, settings.log_level, settings.log_format)
     setup_tracing(settings.service_name)
 
-    app = FastAPI(title="Aether Orchestrator", version="0.2.0")
+    app = FastAPI(title="Aether Orchestrator", version="0.3.0")
     app.add_middleware(CorrelationIdMiddleware)
 
     redis_client = redis.from_url(settings.redis_url, decode_responses=True)
@@ -58,7 +64,12 @@ def create_app() -> FastAPI:
     memory_client = MemoryClient(settings.memory_service_url)
     agent_client = AgentClient(registry)
     orchestration = OrchestrationService(
-        memory_client, agent_client, event_bus, checkpoint_store, agent_bus
+        memory_client,
+        agent_client,
+        event_bus,
+        checkpoint_store,
+        agent_bus,
+        approvals_enabled=settings.approvals_enabled,
     )
 
     @app.get("/health")
@@ -90,7 +101,7 @@ def create_app() -> FastAPI:
 
     @app.post("/v1/orchestrate", response_model=OrchestrationResult)
     async def orchestrate(request: OrchestrationRequest) -> OrchestrationResult:
-        task_graph, results, final_response = await orchestration.run(
+        task_graph, results, final_response, paused, approval_id = await orchestration.run(
             request.conversation_id, request.message
         )
         return OrchestrationResult(
@@ -98,12 +109,16 @@ def create_app() -> FastAPI:
             task_graph=task_graph,
             agent_results=results,
             final_response=final_response,
+            paused=paused,
+            approval_id=approval_id,
         )
 
     @app.post("/v1/orchestrate/resume", response_model=OrchestrationResult)
     async def resume_workflow(request: ResumeRequest) -> OrchestrationResult:
         try:
-            task_graph, results, final_response = await orchestration.resume(request.conversation_id)
+            task_graph, results, final_response, paused, approval_id = await orchestration.resume(
+                request.conversation_id
+            )
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         return OrchestrationResult(
@@ -111,7 +126,24 @@ def create_app() -> FastAPI:
             task_graph=task_graph,
             agent_results=results,
             final_response=final_response,
+            paused=paused,
+            approval_id=approval_id,
         )
+
+    @app.get("/v1/approvals/pending")
+    async def list_pending_approvals() -> list[dict]:
+        approvals = await memory_client.list_pending_approvals()
+        return [a.model_dump(mode="json") for a in approvals]
+
+    @app.post("/v1/approvals/{approval_id}/approve")
+    async def approve_workflow(approval_id: UUID, body: ApprovalActionRequest) -> dict:
+        approval = await orchestration.approve(approval_id, body.decided_by)
+        return approval.model_dump(mode="json")
+
+    @app.post("/v1/approvals/{approval_id}/reject")
+    async def reject_workflow(approval_id: UUID, body: ApprovalActionRequest) -> dict:
+        approval = await orchestration.reject(approval_id, body.decided_by, body.comment)
+        return approval.model_dump(mode="json")
 
     @app.get("/v1/workflows/{conversation_id}/checkpoint")
     async def get_checkpoint(conversation_id: UUID) -> dict:
@@ -130,6 +162,4 @@ app = create_app()
 def main() -> None:
     import uvicorn
 
-    uvicorn.run(
-        "aether_orchestrator.main:app", host=settings.host, port=settings.port, reload=False
-    )
+    uvicorn.run("aether_orchestrator.main:app", host=settings.host, port=settings.port, reload=False)

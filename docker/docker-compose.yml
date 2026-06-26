@@ -63,6 +63,7 @@ services:
       SERVICE_NAME: orchestrator
       MEMORY_SERVICE_URL: http://memory-service:8002
       REDIS_URL: redis://redis:6379/0
+      APPROVALS_ENABLED: ${APPROVALS_ENABLED:-false}
     ports:
       - "8001:8001"
     command: ["uvicorn", "aether_orchestrator.main:app", "--host", "0.0.0.0", "--port", "8001"]
@@ -88,6 +89,30 @@ services:
       - "8004:8004"
     command: ["uvicorn", "aether_knowledge.main:app", "--host", "0.0.0.0", "--port", "8004"]
 
+  evaluation-service:
+    <<: *service-common
+    environment:
+      SERVICE_NAME: evaluation-service
+      POSTGRES_URL: postgresql+asyncpg://aether:aether@postgres:5432/aether
+      REDIS_URL: redis://redis:6379/0
+      MEMORY_SERVICE_URL: http://memory-service:8002
+      ORCHESTRATOR_URL: http://orchestrator:8001
+    ports:
+      - "8005:8005"
+    command: ["uvicorn", "aether_evaluation.main:app", "--host", "0.0.0.0", "--port", "8005"]
+    depends_on:
+      - memory-service
+      - orchestrator
+
+  prompt-registry:
+    <<: *service-common
+    environment:
+      SERVICE_NAME: prompt-registry
+      POSTGRES_URL: postgresql+asyncpg://aether:aether@postgres:5432/aether
+    ports:
+      - "8006:8006"
+    command: ["uvicorn", "aether_prompt_registry.main:app", "--host", "0.0.0.0", "--port", "8006"]
+
   api-gateway:
     <<: *service-common
     environment:
@@ -96,6 +121,8 @@ services:
       MEMORY_SERVICE_URL: http://memory-service:8002
       RESPONSE_BUILDER_URL: http://response-builder:8003
       KNOWLEDGE_SERVICE_URL: http://knowledge-service:8004
+      EVALUATION_SERVICE_URL: http://evaluation-service:8005
+      PROMPT_REGISTRY_URL: http://prompt-registry:8006
       REDIS_URL: redis://redis:6379/0
       AUTH_ENABLED: ${AUTH_ENABLED:-false}
       JWT_SECRET: ${JWT_SECRET:-aether-dev-secret-change-in-production}
@@ -108,6 +135,8 @@ services:
       - memory-service
       - response-builder
       - knowledge-service
+      - evaluation-service
+      - prompt-registry
 
   agent-planner:
     <<: *service-common
@@ -235,6 +264,9 @@ services:
     profiles: ["observability"]
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ../monitoring/grafana/dashboards:/var/lib/grafana/dashboards
     ports:
       - "3000:3000"
     networks:

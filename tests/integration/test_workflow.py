@@ -39,9 +39,7 @@ async def test_full_orchestration_workflow() -> None:
         assert stream_resp.status_code == 200
         assert "text/event-stream" in stream_resp.headers.get("content-type", "")
 
-        messages_resp = await client.get(
-            f"{GATEWAY_URL}/v1/conversations/{conversation_id}/messages"
-        )
+        messages_resp = await client.get(f"{GATEWAY_URL}/v1/conversations/{conversation_id}/messages")
         assert messages_resp.status_code == 200
         messages = messages_resp.json()
         assert len(messages) >= 2

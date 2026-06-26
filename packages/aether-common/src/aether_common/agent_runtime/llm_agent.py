@@ -30,9 +30,7 @@ def build_agent(
         start = time.perf_counter()
         description = request.task.input.get("description", request.task.description)
         context_summary = "\n".join(f"{m.role}: {m.content}" for m in request.context.messages[-6:])
-        artifacts_text = "\n".join(
-            f"{k}: {str(v)[:500]}" for k, v in request.context.artifacts.items()
-        )
+        artifacts_text = "\n".join(f"{k}: {str(v)[:500]}" for k, v in request.context.artifacts.items())
 
         response = await llm.complete(
             CompletionRequest(

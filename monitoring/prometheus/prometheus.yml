@@ -27,6 +27,16 @@ scrape_configs:
       - targets: ["knowledge-service:8004"]
     metrics_path: /metrics
 
+  - job_name: evaluation-service
+    static_configs:
+      - targets: ["evaluation-service:8005"]
+    metrics_path: /metrics
+
+  - job_name: prompt-registry
+    static_configs:
+      - targets: ["prompt-registry:8006"]
+    metrics_path: /metrics
+
   - job_name: otel-collector
     static_configs:
       - targets: ["otel-collector:8889"]

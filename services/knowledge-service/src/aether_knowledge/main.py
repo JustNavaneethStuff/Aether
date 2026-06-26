@@ -1,4 +1,3 @@
-
 import structlog
 from aether_common.config.settings import BaseServiceSettings
 from aether_common.contracts.tools import KnowledgeDocument, KnowledgeQuery

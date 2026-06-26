@@ -40,6 +40,8 @@ class OrchestrationResult(BaseModel):
     task_graph: TaskGraph
     agent_results: list[AgentResult]
     final_response: str
+    paused: bool = False
+    approval_id: UUID | None = None
 
 
 class StreamEvent(BaseModel):

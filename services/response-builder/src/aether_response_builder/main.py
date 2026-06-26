@@ -80,6 +80,4 @@ app = create_app()
 def main() -> None:
     import uvicorn
 
-    uvicorn.run(
-        "aether_response_builder.main:app", host=settings.host, port=settings.port, reload=False
-    )
+    uvicorn.run("aether_response_builder.main:app", host=settings.host, port=settings.port, reload=False)

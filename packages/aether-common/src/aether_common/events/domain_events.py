@@ -30,3 +30,15 @@ class LLMUsageEvent(DomainEvent):
 
 class WorkflowCompletedEvent(DomainEvent):
     event_type: str = "workflow.completed"
+
+
+class EvaluationCompletedEvent(DomainEvent):
+    event_type: str = "evaluation.completed"
+
+
+class ApprovalRequestedEvent(DomainEvent):
+    event_type: str = "approval.requested"
+
+
+class ApprovalDecidedEvent(DomainEvent):
+    event_type: str = "approval.decided"

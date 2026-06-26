@@ -13,6 +13,8 @@ members = [
     "services/memory-service",
     "services/response-builder",
     "services/knowledge-service",
+    "services/evaluation-service",
+    "services/prompt-registry",
     "services/agents/planner",
     "services/agents/research",
     "services/agents/critic",

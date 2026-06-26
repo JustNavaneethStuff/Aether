@@ -75,6 +75,31 @@ POST   /v1/orchestrate/resume          (orchestrator)
 GET    /v1/workflows/{id}/checkpoint     (orchestrator)
 ```
 
+## Phase 3 Features
+
+- **Evaluation engine** — rule-based workflow scoring via `evaluation-service`
+- **Prompt versioning** — versioned templates with render API via `prompt-registry`
+- **Experiment tracking** — experiment definitions and conversation variant assignments
+- **Cost tracking** — LLM usage records with local pricing estimates
+- **Human approval workflows** — pause/resume on `requires_approval` task nodes
+- **Agent performance dashboards** — Grafana Phase 3 dashboard for latency, cost, evaluations, approvals
+
+### Phase 3 API Additions
+
+```
+POST   /v1/evaluations/run
+GET    /v1/evaluations/{conversation_id}
+GET    /v1/evaluations/summary
+POST   /v1/prompts
+GET    /v1/prompts/{agent_name}
+POST   /v1/prompts/render
+GET    /v1/usage/cost-summary
+GET    /v1/experiments
+GET    /v1/approvals/pending
+POST   /v1/approvals/{id}/approve
+POST   /v1/approvals/{id}/reject
+```
+
 ## Services
 
 | Service | Port | Description |
@@ -84,6 +109,8 @@ GET    /v1/workflows/{id}/checkpoint     (orchestrator)
 | memory-service | 8002 | Conversation persistence |
 | response-builder | 8003 | Response aggregation + streaming |
 | knowledge-service | 8004 | Vector search + RAG |
+| evaluation-service | 8005 | Workflow evaluation + scoring |
+| prompt-registry | 8006 | Prompt versioning + rendering |
 | agent-planner | 8010 | Task decomposition |
 | agent-research | 8011 | Research agent |
 | agent-critic | 8012 | Critique agent |

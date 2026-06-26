@@ -17,4 +17,4 @@ jobs:
       - run: uv sync --all-packages
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      - run: uv run pytest packages/aether-common/tests services/response-builder/tests -v
+      - run: uv run pytest packages/aether-common/tests services/response-builder/tests services/evaluation-service/tests services/prompt-registry/tests services/orchestrator/tests -v
