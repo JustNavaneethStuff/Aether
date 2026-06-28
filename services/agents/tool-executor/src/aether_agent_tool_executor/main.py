@@ -1,12 +1,13 @@
 import time
 from uuid import uuid4
 
-import httpx
 from aether_common.agent_runtime.app import create_agent_app, run_agent
 from aether_common.config.settings import BaseServiceSettings
-from aether_common.contracts.tools import KnowledgeQuery, ToolCall
+from aether_common.contracts.knowledge_acquisition import CrawlRequest
+from aether_common.contracts.tools import KnowledgeQuery, ToolCall, ToolResult
 from aether_common.domain.agent import AgentResult, ExecuteAgentRequest
 from aether_common.domain.enums import AgentCapability
+from aether_common.integrations.factory import build_knowledge_acquisition
 from aether_common.plugins.registry import BuiltinTools
 from pydantic_settings import SettingsConfigDict
 
@@ -22,6 +23,7 @@ class ToolExecutorSettings(BaseServiceSettings):
 
 
 settings = ToolExecutorSettings()
+knowledge = build_knowledge_acquisition(settings)
 
 
 async def execute_tools(request: ExecuteAgentRequest) -> AgentResult:
@@ -40,29 +42,40 @@ async def execute_tools(request: ExecuteAgentRequest) -> AgentResult:
             result = BuiltinTools.calculator({**call.arguments, "call_id": call_id}, {})
             results.append(result.model_dump())
         elif call.tool_name == "knowledge_search":
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    f"{settings.knowledge_service_url}/v1/search",
-                    json=KnowledgeQuery(
-                        query=call.arguments.get("query", ""),
-                        top_k=call.arguments.get("top_k", 5),
-                        conversation_id=request.context.conversation_id,
-                    ).model_dump(mode="json"),
+            chunks = await knowledge.search(
+                KnowledgeQuery(
+                    query=call.arguments.get("query", ""),
+                    top_k=call.arguments.get("top_k", 5),
+                    conversation_id=request.context.conversation_id,
                 )
-                resp.raise_for_status()
-                from aether_common.contracts.tools import ToolResult
-
-                results.append(
-                    ToolResult(
-                        call_id=call_id,
-                        tool_name="knowledge_search",
-                        success=True,
-                        output=resp.json(),
-                    ).model_dump()
+            )
+            results.append(
+                ToolResult(
+                    call_id=call_id,
+                    tool_name="knowledge_search",
+                    success=True,
+                    output=[c.model_dump(mode="json") for c in chunks],
+                ).model_dump()
+            )
+        elif call.tool_name == "web_crawl":
+            handle = await knowledge.trigger_crawl(
+                CrawlRequest(
+                    seed_urls=call.arguments.get("seed_urls", []),
+                    max_depth=call.arguments.get("max_depth", 1),
+                    allowed_domains=call.arguments.get("allowed_domains", []),
+                    incremental=call.arguments.get("incremental", False),
+                    conversation_id=request.context.conversation_id,
                 )
+            )
+            results.append(
+                ToolResult(
+                    call_id=call_id,
+                    tool_name="web_crawl",
+                    success=True,
+                    output=handle.model_dump(mode="json"),
+                ).model_dump()
+            )
         else:
-            from aether_common.contracts.tools import ToolResult
-
             results.append(
                 ToolResult(
                     call_id=call_id,

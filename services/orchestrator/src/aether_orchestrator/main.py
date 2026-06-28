@@ -3,10 +3,18 @@ from uuid import UUID
 import redis.asyncio as redis
 import structlog
 from aether_common.config.settings import BaseServiceSettings
-from aether_common.domain.api_models import OrchestrationRequest, OrchestrationResult
+from aether_common.domain.api_models import (
+    AsyncOrchestrationRequest,
+    AsyncOrchestrationResponse,
+    JobCallbackRequest,
+    OrchestrationRequest,
+    OrchestrationResult,
+)
 from aether_common.domain.enums import HealthState
 from aether_common.infrastructure.agent_bus import AgentCommunicationBus, CheckpointStore
 from aether_common.infrastructure.redis_clients import AgentRegistry, EventBus
+from aether_common.integrations.factory import build_task_queue
+from aether_common.integrations.task_queue.local import LocalTaskQueue
 from aether_common.observability.telemetry import (
     CorrelationIdMiddleware,
     get_metrics,
@@ -35,6 +43,7 @@ class OrchestratorSettings(BaseServiceSettings):
     host: str = "0.0.0.0"
     port: int = 8001
     approvals_enabled: bool = False
+    atlas_callback_url: str = "http://localhost:8001/v1/internal/workflows/execute"
 
 
 class ResumeRequest(BaseModel):
@@ -44,6 +53,11 @@ class ResumeRequest(BaseModel):
 class ApprovalActionRequest(BaseModel):
     decided_by: str = "system"
     comment: str = ""
+
+
+class WorkflowExecuteRequest(BaseModel):
+    conversation_id: UUID
+    message: str
 
 
 settings = OrchestratorSettings()
@@ -63,14 +77,18 @@ def create_app() -> FastAPI:
     agent_bus = AgentCommunicationBus(redis_client)
     memory_client = MemoryClient(settings.memory_service_url)
     agent_client = AgentClient(registry)
+    task_queue = build_task_queue(settings)
     orchestration = OrchestrationService(
         memory_client,
         agent_client,
         event_bus,
         checkpoint_store,
         agent_bus,
+        task_queue,
         approvals_enabled=settings.approvals_enabled,
     )
+    if isinstance(task_queue, LocalTaskQueue):
+        task_queue.set_executor(orchestration.build_job_result)
 
     @app.get("/health")
     async def health() -> dict:
@@ -112,6 +130,28 @@ def create_app() -> FastAPI:
             paused=paused,
             approval_id=approval_id,
         )
+
+    @app.post("/v1/orchestrate/async", response_model=AsyncOrchestrationResponse)
+    async def orchestrate_async(request: AsyncOrchestrationRequest) -> AsyncOrchestrationResponse:
+        callback = settings.atlas_callback_url if settings.task_queue_backend == "atlas" else None
+        job_id, state, result = await orchestration.submit_async(
+            request.conversation_id, request.message, callback_url=callback
+        )
+        return AsyncOrchestrationResponse(
+            conversation_id=request.conversation_id,
+            job_id=job_id,
+            state=state,
+            result=result,
+        )
+
+    @app.post("/v1/internal/workflows/execute", response_model=OrchestrationResult)
+    async def execute_workflow_internal(request: WorkflowExecuteRequest) -> OrchestrationResult:
+        return await orchestration.execute_workflow_payload(request.conversation_id, request.message)
+
+    @app.post("/v1/internal/jobs/{job_id}/callback")
+    async def job_completion_callback(job_id: str, body: JobCallbackRequest) -> dict:
+        await orchestration.handle_job_callback(job_id, body.success, body.output, body.error)
+        return {"job_id": job_id, "accepted": True}
 
     @app.post("/v1/orchestrate/resume", response_model=OrchestrationResult)
     async def resume_workflow(request: ResumeRequest) -> OrchestrationResult:

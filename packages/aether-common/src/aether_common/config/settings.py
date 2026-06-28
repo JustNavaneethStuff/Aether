@@ -15,3 +15,14 @@ class BaseServiceSettings(BaseSettings):
     anthropic_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
     anthropic_model: str = "claude-3-5-haiku-latest"
+
+    # Ecosystem integration (defaults keep Aether self-contained)
+    task_queue_backend: str = "local"
+    atlas_queue_url: str = "http://localhost:9000"
+    atlas_queue_api_key: str = ""
+    atlas_callback_url: str = ""
+
+    knowledge_backend: str = "local"
+    knowledge_service_url: str = "http://localhost:8004"
+    argus_api_url: str = "http://localhost:8000"
+    argus_scheduler_url: str = "http://localhost:8001"

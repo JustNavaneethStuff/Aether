@@ -3,7 +3,9 @@ from uuid import UUID, uuid4
 
 import httpx
 import structlog
+from aether_common.contracts.task_queue import JobRequest, JobResult, JobState, TaskQueuePort
 from aether_common.domain.agent import AgentResult, AgentTask, ExecuteAgentRequest
+from aether_common.domain.api_models import OrchestrationResult
 from aether_common.domain.approval import ApprovalDecision, ApprovalRequest, ApprovalStatus
 from aether_common.domain.conversation import SharedContext
 from aether_common.domain.enums import MessageRole, TaskGraphStatus, TaskStatus
@@ -143,6 +145,7 @@ class OrchestrationService:
         event_bus: EventBus,
         checkpoint_store: CheckpointStore,
         agent_bus: AgentCommunicationBus,
+        task_queue: TaskQueuePort,
         approvals_enabled: bool = False,
     ) -> None:
         self._memory = memory_client
@@ -150,7 +153,69 @@ class OrchestrationService:
         self._events = event_bus
         self._checkpoints = checkpoint_store
         self._agent_bus = agent_bus
+        self._task_queue = task_queue
         self._approvals_enabled = approvals_enabled
+
+    async def submit_async(
+        self, conversation_id: UUID, message: str, callback_url: str | None = None
+    ) -> tuple[str, str, OrchestrationResult | None]:
+        """Submit workflow execution as a background job (inline when using local queue)."""
+        job_request = JobRequest(
+            name="orchestrate_workflow",
+            payload={"conversation_id": str(conversation_id), "message": message},
+            callback_url=callback_url,
+        )
+        handle = await self._task_queue.submit(job_request)
+        await self._events.publish(
+            "job.submitted",
+            {"conversation_id": str(conversation_id), "job_id": handle.job_id},
+        )
+
+        status = await self._task_queue.get_status(handle.job_id)
+        orch_result: OrchestrationResult | None = None
+        if status.result and "orchestration" in status.result:
+            orch_result = OrchestrationResult.model_validate(status.result["orchestration"])
+
+        if status.state in (JobState.COMPLETED, JobState.FAILED, JobState.CANCELLED):
+            await self._events.publish(
+                "job.completed",
+                {
+                    "conversation_id": str(conversation_id),
+                    "job_id": handle.job_id,
+                    "state": status.state.value,
+                    "error": status.error,
+                },
+            )
+
+        return handle.job_id, status.state.value, orch_result
+
+    async def handle_job_callback(self, job_id: str, success: bool, output: dict, error: str | None) -> None:
+        await self._events.publish(
+            "job.completed",
+            {"job_id": job_id, "success": success, "output": output, "error": error},
+        )
+
+    async def execute_workflow_payload(self, conversation_id: UUID, message: str) -> OrchestrationResult:
+        task_graph, results, final_response, paused, approval_id = await self.run(conversation_id, message)
+        return OrchestrationResult(
+            conversation_id=conversation_id,
+            task_graph=task_graph,
+            agent_results=results,
+            final_response=final_response,
+            paused=paused,
+            approval_id=approval_id,
+        )
+
+    async def build_job_result(self, request: JobRequest) -> JobResult:
+        conv_id = UUID(request.payload["conversation_id"])
+        msg = request.payload["message"]
+        orch_result = await self.execute_workflow_payload(conv_id, msg)
+        return JobResult(
+            job_id="",
+            success=not orch_result.paused and all(r.success for r in orch_result.agent_results),
+            output={"orchestration": orch_result.model_dump(mode="json")},
+            error=None if orch_result.paused or all(r.success for r in orch_result.agent_results) else "agent_failure",
+        )
 
     async def run(
         self, conversation_id: UUID, message: str

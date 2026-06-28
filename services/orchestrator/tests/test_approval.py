@@ -59,6 +59,7 @@ def orchestration(task_graph, conversation_id, risky_node_id):
     events = AsyncMock()
     checkpoints = AsyncMock()
     agent_bus = AsyncMock()
+    task_queue = AsyncMock()
 
     service = OrchestrationService(
         memory,
@@ -66,6 +67,7 @@ def orchestration(task_graph, conversation_id, risky_node_id):
         events,
         checkpoints,
         agent_bus,
+        task_queue,
         approvals_enabled=True,
     )
     return service, memory, agents, events, checkpoints, task_graph, risky_node_id

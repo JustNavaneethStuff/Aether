@@ -42,3 +42,19 @@ class ApprovalRequestedEvent(DomainEvent):
 
 class ApprovalDecidedEvent(DomainEvent):
     event_type: str = "approval.decided"
+
+
+class JobSubmittedEvent(DomainEvent):
+    event_type: str = "job.submitted"
+
+
+class JobCompletedEvent(DomainEvent):
+    event_type: str = "job.completed"
+
+
+class KnowledgeAcquisitionRequestedEvent(DomainEvent):
+    event_type: str = "knowledge.acquisition.requested"
+
+
+class KnowledgeUpdatedEvent(DomainEvent):
+    event_type: str = "knowledge.updated"

@@ -68,4 +68,14 @@ class BuiltinTools:
                 description="Search the knowledge base for relevant documents",
                 parameters={"query": "string", "top_k": "integer"},
             ),
+            ToolDefinition(
+                name="web_crawl",
+                description="Trigger a web crawl to acquire external knowledge",
+                parameters={
+                    "seed_urls": "array",
+                    "max_depth": "integer",
+                    "allowed_domains": "array",
+                    "incremental": "boolean",
+                },
+            ),
         ]

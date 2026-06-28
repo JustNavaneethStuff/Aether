@@ -12,6 +12,22 @@ Client → API Gateway → Orchestrator → Specialized Agents → Memory Layer 
 
 Aether is **not a chatbot**. It is a microservices-based orchestration engine with replaceable agents, conversation persistence, task decomposition, and full observability.
 
+## Demos
+
+Short screen recordings walking through the platform. See [docs/demos/README.md](docs/demos/README.md) for the full list and recording guide.
+
+| Demo | What it shows |
+|------|---------------|
+| End-to-end orchestration | Create a conversation, send a message, watch the planner decompose the task and agents execute via SSE streaming |
+| Async workflows (Atlas Queue) | Submit a long-running workflow via `POST /v1/orchestrate/async` and receive completion events |
+| Knowledge acquisition (Argus) | Trigger a `web_crawl` tool and retrieve datasets for RAG |
+| Observability | Grafana dashboards for agent latency, cost, evaluations, and approvals |
+
+> Videos live under `docs/demos/`. Until recordings are added, the table above is the storyboard for each clip.
+
+<!-- To embed a video on GitHub, drag the file into an issue/PR comment to get a CDN URL, or commit an MP4 under docs/demos/ and reference it:
+https://github.com/JustNavaneethStuff/Aether/assets/<id>/<video>.mp4 -->
+
 ## Tech Stack
 
 - Python 3.13, FastAPI, SQLAlchemy, Pydantic
@@ -55,7 +71,7 @@ curl http://localhost:8000/v1/agents
 
 ## Phase 2 Features
 
-- **Tool calling** — `agent-tool-executor` with calculator and knowledge_search tools
+- **Tool calling** — `agent-tool-executor` with calculator, knowledge_search, and web_crawl tools
 - **Vector search / RAG** — `knowledge-service` with hybrid embedding + TF-IDF search
 - **Checkpointing** — workflow state saved after each agent; resume via `POST /v1/conversations/{id}/resume`
 - **Rate limiting** — Redis sliding-window in api-gateway (60 req/min default)
@@ -99,6 +115,28 @@ GET    /v1/approvals/pending
 POST   /v1/approvals/{id}/approve
 POST   /v1/approvals/{id}/reject
 ```
+
+## Ecosystem Integration
+
+Aether integrates with sibling platforms via **ports and adapters** in `aether-common/integrations/`. Defaults keep Aether self-contained — no sibling services required locally.
+
+| Platform | Port | Enable with | Purpose |
+|----------|------|-------------|---------|
+| Atlas Queue | `TaskQueuePort` | `TASK_QUEUE_BACKEND=atlas` | Async workflow jobs, retries, scheduling |
+| Argus | `KnowledgeAcquisitionPort` | `KNOWLEDGE_BACKEND=argus` | Web crawls, external RAG datasets |
+| CloudForge | Deployment contract | See `docs/deployment/` | AWS IaC, ECS, CI/CD |
+
+### Integration API Additions
+
+```
+POST   /v1/orchestrate/async              (orchestrator — background workflow)
+POST   /v1/internal/workflows/execute     (orchestrator — Atlas webhook target)
+POST   /v1/internal/jobs/{id}/callback    (orchestrator — job completion)
+POST   /v1/acquire                        (knowledge-service — trigger crawl)
+GET    /v1/datasets/{id}                  (knowledge-service — dataset retrieval)
+```
+
+See ADRs 014–017 and [architecture overview](docs/architecture/overview.md).
 
 ## Services
 

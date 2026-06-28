@@ -64,6 +64,10 @@ services:
       MEMORY_SERVICE_URL: http://memory-service:8002
       REDIS_URL: redis://redis:6379/0
       APPROVALS_ENABLED: ${APPROVALS_ENABLED:-false}
+      TASK_QUEUE_BACKEND: ${TASK_QUEUE_BACKEND:-local}
+      ATLAS_QUEUE_URL: ${ATLAS_QUEUE_URL:-http://host.docker.internal:9000}
+      ATLAS_QUEUE_API_KEY: ${ATLAS_QUEUE_API_KEY:-}
+      ATLAS_CALLBACK_URL: ${ATLAS_CALLBACK_URL:-http://orchestrator:8001/v1/internal/workflows/execute}
     ports:
       - "8001:8001"
     command: ["uvicorn", "aether_orchestrator.main:app", "--host", "0.0.0.0", "--port", "8001"]
@@ -85,6 +89,9 @@ services:
       SERVICE_NAME: knowledge-service
       POSTGRES_URL: postgresql+asyncpg://aether:aether@postgres:5432/aether
       REDIS_URL: redis://redis:6379/0
+      KNOWLEDGE_BACKEND: ${KNOWLEDGE_BACKEND:-local}
+      ARGUS_API_URL: ${ARGUS_API_URL:-http://host.docker.internal:8000}
+      ARGUS_SCHEDULER_URL: ${ARGUS_SCHEDULER_URL:-http://host.docker.internal:8001}
     ports:
       - "8004:8004"
     command: ["uvicorn", "aether_knowledge.main:app", "--host", "0.0.0.0", "--port", "8004"]
@@ -230,6 +237,9 @@ services:
       SERVICE_NAME: agent-tool-executor
       SERVICE_URL: http://agent-tool-executor:8018
       KNOWLEDGE_SERVICE_URL: http://knowledge-service:8004
+      KNOWLEDGE_BACKEND: ${KNOWLEDGE_BACKEND:-local}
+      ARGUS_API_URL: ${ARGUS_API_URL:-http://host.docker.internal:8000}
+      ARGUS_SCHEDULER_URL: ${ARGUS_SCHEDULER_URL:-http://host.docker.internal:8001}
       REDIS_URL: redis://redis:6379/0
     ports:
       - "8018:8018"

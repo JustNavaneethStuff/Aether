@@ -64,6 +64,10 @@ def create_agent_app(
     async def health() -> HealthStatus:
         return HealthStatus(state=HealthState.HEALTHY, service=agent_name)
 
+    @app.get("/ready")
+    async def ready() -> HealthStatus:
+        return HealthStatus(state=HealthState.HEALTHY, service=agent_name)
+
     @app.get("/metrics")
     async def metrics() -> Response:
         return Response(content=get_metrics(), media_type="text/plain")
