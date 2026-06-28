@@ -1,4 +1,4 @@
-.PHONY: install lint format typecheck test up up-core down logs migrate seed
+.PHONY: install lint format typecheck test up up-core down logs migrate seed demo
 
 install:
 	uv sync --all-packages
@@ -40,3 +40,6 @@ migrate:
 
 seed:
 	uv run python scripts/seed_dev_data.py
+
+demo:
+	bash scripts/demos/run-all.sh

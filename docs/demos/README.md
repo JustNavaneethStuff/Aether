@@ -1,62 +1,169 @@
 # Aether Demos
 
-Screen recordings that walk through Aether's core flows. Each demo below has a storyboard so the clip stays focused and reproducible.
+Reproducible walkthroughs for Aether's core flows. Each demo is a runnable script under [`scripts/demos/`](../../scripts/demos/).
 
-## How to add a video
+## Prerequisites
 
-GitHub renders inline videos in Markdown when they are hosted on the GitHub user-content CDN:
+```bash
+cp .env.example .env
+make up          # core services
+make up-obs      # optional: Prometheus + Grafana for demo 4
+```
 
-1. Open a draft issue or PR comment in the repo.
-2. Drag the `.mp4`/`.mov`/`.webm` file into the comment box. GitHub uploads it and returns a URL like
-   `https://github.com/JustNavaneethStuff/Aether/assets/<user-id>/<uuid>.mp4`.
-3. Paste that URL on its own line under the matching demo below (GitHub auto-embeds a player).
+## Run all demos
 
-Alternatively, commit the file under `docs/demos/` and link it relatively (note: large binaries inflate the repo; prefer the CDN approach or [Git LFS](https://git-lfs.com/)).
+```bash
+# Linux / macOS / Git Bash
+bash scripts/demos/run-all.sh
 
-Keep clips to 60-90 seconds. Record at 1280x720 or higher.
+# Windows PowerShell
+.\scripts\demos\run-all.ps1
+
+# Makefile shortcut
+make demo
+```
+
+---
 
 ## 1. End-to-end orchestration
 
-**Goal:** show a request flowing through the gateway, orchestrator, planner, and specialized agents with SSE streaming.
+**What it shows:** A request flowing through the API Gateway, orchestrator, planner, and specialized agents with SSE streaming.
 
-Storyboard:
-1. `make up` to start the stack.
-2. `POST /v1/conversations` to create a conversation.
-3. `POST /v1/conversations/{id}/messages` with an analytical prompt; show the streamed SSE tokens.
-4. `GET /v1/agents` to show the registered replaceable agents.
+```bash
+bash scripts/demos/01-orchestration.sh
+```
 
-<!-- Paste video URL below this line -->
+**Steps performed:**
+1. `GET /health` on the gateway
+2. `POST /v1/conversations` — create a conversation
+3. `GET /v1/agents` — list replaceable registered agents
+4. `POST /v1/conversations/{id}/messages` — send a message and stream SSE events
+5. `GET /v1/conversations/{id}/messages` — verify persisted messages
+
+**Expected SSE events** (streamed from response-builder):
+
+```
+event: task.started
+data: {"agent": "planner", ...}
+
+event: task.completed
+data: {"agent": "planner", ...}
+
+event: message
+data: {"content": "...", ...}
+```
+
+---
 
 ## 2. Async workflows (Atlas Queue integration)
 
-**Goal:** show a long-running workflow submitted as a background job.
+**What it shows:** Submitting a workflow as a background job. With the default `TASK_QUEUE_BACKEND=local`, execution runs inline and returns immediately with `state: completed`.
 
-Storyboard:
-1. Default `TASK_QUEUE_BACKEND=local` runs inline.
-2. `POST /v1/orchestrate/async` returns a `job_id` and state.
-3. (Optional) Set `TASK_QUEUE_BACKEND=atlas` with Atlas Queue running, then show the task in Atlas's dashboard and the `job.completed` event in Aether.
+```bash
+bash scripts/demos/02-async-workflow.sh
+```
 
-<!-- Paste video URL below this line -->
+**Steps performed:**
+1. Create a conversation via the gateway
+2. `POST /v1/orchestrate/async` on the orchestrator
+
+**Example response:**
+
+```json
+{
+  "conversation_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+  "job_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "state": "completed",
+  "result": {
+    "conversation_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "final_response": "...",
+    "paused": false
+  }
+}
+```
+
+**With Atlas Queue** (`TASK_QUEUE_BACKEND=atlas`):
+
+```bash
+export TASK_QUEUE_BACKEND=atlas
+export ATLAS_QUEUE_URL=http://localhost:9000
+export ATLAS_QUEUE_API_KEY=dev-api-key
+export ATLAS_CALLBACK_URL=http://orchestrator:8001/v1/internal/workflows/execute
+```
+
+Atlas workers dispatch the workflow via webhook; completion is reported on `POST /v1/internal/jobs/{job_id}/callback` and published as `job.completed` on the Redis event stream.
+
+---
 
 ## 3. Knowledge acquisition (Argus integration)
 
-**Goal:** show external knowledge acquisition feeding RAG.
+**What it shows:** Ingesting documents, hybrid search, triggering a crawl, and retrieving datasets for RAG.
 
-Storyboard:
-1. Invoke the `web_crawl` tool through the tool-executor.
-2. `POST /v1/acquire` on the knowledge-service to trigger a crawl.
-3. `GET /v1/datasets/{id}` to retrieve structured results.
-4. (Optional) With `KNOWLEDGE_BACKEND=argus`, show the crawl appearing in Argus's dashboard.
+```bash
+bash scripts/demos/03-knowledge-acquisition.sh
+```
 
-<!-- Paste video URL below this line -->
+**Steps performed:**
+1. `POST /v1/knowledge/documents` — ingest a document
+2. `POST /v1/knowledge/search` — hybrid embedding + TF-IDF search
+3. `POST /v1/acquire` — trigger crawl (local backend accepts and emits `knowledge.acquisition.requested`)
+4. `GET /v1/datasets/{crawl_id}` — retrieve dataset chunks
+
+**Example acquire response (local backend):**
+
+```json
+{
+  "crawl_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "status": "accepted",
+  "source": "local"
+}
+```
+
+**With Argus** (`KNOWLEDGE_BACKEND=argus`):
+
+```bash
+export KNOWLEDGE_BACKEND=argus
+export ARGUS_API_URL=http://localhost:8000
+export ARGUS_SCHEDULER_URL=http://localhost:8001
+```
+
+Crawl jobs appear in Argus's scheduler; search results come from Argus's indexed pages.
+
+The `web_crawl` tool on `agent-tool-executor` uses the same `KnowledgeAcquisitionPort` — agents can trigger crawls from within workflows.
+
+---
 
 ## 4. Observability
 
-**Goal:** show the operability story for CloudForge deployments.
+**What it shows:** Health/readiness probes, Prometheus metrics, and Grafana dashboards for CloudForge-style deployments.
 
-Storyboard:
-1. `make up-obs` to start Prometheus and Grafana.
-2. Open the Phase 3 Grafana dashboard.
-3. Run a workflow and watch agent latency, LLM cost, evaluations, and approval metrics update.
+```bash
+make up-obs
+bash scripts/demos/04-observability.sh
+```
 
-<!-- Paste video URL below this line -->
+**Endpoints verified:**
+- `GET /health` and `GET /ready` on orchestrator
+- `GET /metrics` — Prometheus exposition format
+
+**Grafana** (http://localhost:3000, admin/admin):
+
+| Panel | Metric |
+|-------|--------|
+| Agent execution latency | `aether_agent_execution_seconds` |
+| LLM token usage | `aether_llm_tokens_total` |
+| Cost trends | `aether_llm_cost_usd_total` |
+| Approval throughput | `aether_approval_requests_total` |
+
+Run a workflow (demo 1) while Grafana is open to see metrics update in real time.
+
+---
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| `Connection refused` on :8000 | Run `make up` and wait for health checks |
+| Empty agent list | Agents register on startup; check `docker compose logs agent-planner` |
+| Prometheus unreachable | Run `make up-obs` (observability profile) |
+| Async job stays `queued` with Atlas | Ensure Atlas Queue is running and `ATLAS_QUEUE_API_KEY` is set |

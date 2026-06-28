@@ -14,19 +14,20 @@ Aether is **not a chatbot**. It is a microservices-based orchestration engine wi
 
 ## Demos
 
-Short screen recordings walking through the platform. See [docs/demos/README.md](docs/demos/README.md) for the full list and recording guide.
+Runnable walkthroughs for orchestration, async workflows, knowledge acquisition, and observability.
 
-| Demo | What it shows |
-|------|---------------|
-| End-to-end orchestration | Create a conversation, send a message, watch the planner decompose the task and agents execute via SSE streaming |
-| Async workflows (Atlas Queue) | Submit a long-running workflow via `POST /v1/orchestrate/async` and receive completion events |
-| Knowledge acquisition (Argus) | Trigger a `web_crawl` tool and retrieve datasets for RAG |
-| Observability | Grafana dashboards for agent latency, cost, evaluations, and approvals |
+| Demo | Script | What it shows |
+|------|--------|---------------|
+| End-to-end orchestration | `scripts/demos/01-orchestration.sh` | Conversation creation, SSE streaming, agent registry |
+| Async workflows | `scripts/demos/02-async-workflow.sh` | `POST /v1/orchestrate/async` and job completion events |
+| Knowledge acquisition | `scripts/demos/03-knowledge-acquisition.sh` | Ingest, search, crawl trigger, dataset retrieval |
+| Observability | `scripts/demos/04-observability.sh` | Health probes, Prometheus metrics, Grafana dashboards |
 
-> Videos live under `docs/demos/`. Until recordings are added, the table above is the storyboard for each clip.
+```bash
+make up && make demo    # run all demos
+```
 
-<!-- To embed a video on GitHub, drag the file into an issue/PR comment to get a CDN URL, or commit an MP4 under docs/demos/ and reference it:
-https://github.com/JustNavaneethStuff/Aether/assets/<id>/<video>.mp4 -->
+Full guide: [docs/demos/README.md](docs/demos/README.md)
 
 ## Tech Stack
 

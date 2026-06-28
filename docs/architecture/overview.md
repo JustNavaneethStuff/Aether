@@ -8,9 +8,9 @@ Aether is an API-first multi-agent orchestration platform. Clients send messages
 
 See [README.md](../../README.md) for service ports and quick start.
 
-## Video Demos
+## Demos
 
-Walkthroughs of the request flow, async workflows, knowledge acquisition, and observability live in [docs/demos/README.md](../demos/README.md).
+Runnable walkthroughs live in [docs/demos/README.md](../demos/README.md). Run `make demo` after `make up`.
 
 ## Request Flow
 
